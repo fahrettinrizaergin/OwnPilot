@@ -317,6 +317,47 @@ describe('createAgentExecutionMiddleware', () => {
 
       expect(result.streamed).toBe(true);
     });
+
+    it('should call stream.onError with the agent error when stream callbacks are present', async () => {
+      const agent = createAgent();
+      agent.chat.mockResolvedValue({ ok: false, error: { message: 'API rate limit exceeded' } });
+      const onError = vi.fn();
+      const stream: StreamCallbacks = { onChunk: vi.fn(), onError };
+      const ctx = createContext({ store: { agent, stream } });
+      const msg = createMessage();
+      const next = vi.fn().mockResolvedValue(createNextResult());
+
+      await middleware(msg, ctx, next);
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'API rate limit exceeded' }));
+    });
+
+    it('should call stream.onError with "Unknown error" when error message is missing', async () => {
+      const agent = createAgent();
+      agent.chat.mockResolvedValue({ ok: false });
+      const onError = vi.fn();
+      const stream: StreamCallbacks = { onChunk: vi.fn(), onError };
+      const ctx = createContext({ store: { agent, stream } });
+      const msg = createMessage();
+      const next = vi.fn().mockResolvedValue(createNextResult());
+
+      await middleware(msg, ctx, next);
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Unknown error' }));
+    });
+
+    it('should not call stream.onError when no stream callbacks are present', async () => {
+      const agent = createAgent();
+      agent.chat.mockResolvedValue({ ok: false, error: { message: 'error' } });
+      const ctx = createContext({ store: { agent } }); // no stream in context
+      const msg = createMessage();
+      const next = vi.fn().mockResolvedValue(createNextResult());
+
+      // Should not throw even without stream callbacks
+      await expect(middleware(msg, ctx, next)).resolves.toBeDefined();
+    });
   });
 
   // =========================================================================
