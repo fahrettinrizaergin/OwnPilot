@@ -248,6 +248,28 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRes
     return () => window.removeEventListener('storage', handleStorage);
   }, [connect]);
 
+  // Reconnect when the page becomes visible again (e.g. after a server restart
+  // while the tab was in the background, or after the reconnect counter was
+  // exhausted). Resets the attempt counter so the connection can be restored
+  // without requiring a full page refresh.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+      // Cancel any pending reconnect timer before re-trying immediately
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+
+      reconnectAttemptsRef.current = 0;
+      connect();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [connect]);
+
   return {
     status,
     sessionId,

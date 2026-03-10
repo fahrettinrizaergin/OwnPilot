@@ -186,6 +186,14 @@ export function createAgentExecutionMiddleware(): MessageMiddleware {
       if (!result.ok) {
         ctx.set('error', result.error);
 
+        // Notify the stream of the error so the client receives an SSE error event
+        // instead of an empty bubble. Without this call the error is silently dropped
+        // in the MessageBus path and the client only sees the "Calling…" progress
+        // event followed by a closed stream with no content.
+        if (stream?.onError) {
+          stream.onError(new Error(result.error?.message ?? 'Unknown error'));
+        }
+
         return {
           response: {
             id: randomUUID(),
